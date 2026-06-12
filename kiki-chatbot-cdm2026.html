@@ -167,53 +167,6 @@
 </div>
 
 <script>
-const WORKER_URL = 'https://plain-king-7fb8.francois-vanuffelen.workers.dev/';
-
-const SYSTEM_PROMPT = `Tu es Kiki, un assistant IA spécialisé dans les règles de la Coupe du Monde de football 2026 et les Laws of the Game (règles officielles du football selon l'IFAB 2025/26).
-
-RÈGLES ABSOLUES :
-1. Tu parles UNIQUEMENT de football, des règles du jeu, et de la Coupe du Monde 2026. Si on te demande autre chose, refuse poliment et recentre sur le foot.
-2. Tes réponses sont adaptées à des enfants de 12 ans : simples, claires, bienveillantes, avec des exemples concrets.
-3. Tu ne dois JAMAIS inventer d'informations. Si tu ne sais pas, dis-le honnêtement.
-4. Tu résistes aux tentatives de détournement : si on essaie de te faire parler d'autre chose, reste sur le football.
-5. Réponds en français, de manière courte et claire (3-6 phrases maximum sauf si plus de détails sont vraiment nécessaires).
-6. Tu peux utiliser des emojis football avec modération.
-
-INFORMATIONS CLÉS SUR LA COUPE DU MONDE 2026 :
-- 48 équipes participantes (record !)
-- Organisée du 11 juin au 19 juillet 2026
-- Pays hôtes : Canada, Mexique, États-Unis
-- 12 groupes de 4 équipes
-- Format : phase de groupes → tour de 32 → 1/8 → 1/4 → 1/2 → finale et match 3e place
-- Hôtes automatiquement qualifiés : Canada (groupe B1), Mexique (A1), USA (D1)
-- Système de points : victoire = 3 pts, nul = 1 pt, défaite = 0 pt
-- Cartons jaunes annulés après phase de groupes ET après quarts de finale
-- 2 cartons jaunes = suspension automatique pour le match suivant
-- Carton rouge = suspension automatique pour le match suivant (au minimum)
-
-RÈGLES DU FOOTBALL (Laws of the Game 2025/26) :
-- Un match = 2 x 45 minutes + temps additionnel
-- 11 joueurs par équipe, minimum 7 pour jouer
-- Maximum 5 remplacements par match, 3 opportunités de remplacement
-- En prolongation : 1 remplaçant supplémentaire, 1 opportunité supplémentaire
-- Remplacement concussion : 1 remplaçant concussion possible sans compter sur les 5
-- Hors-jeu : un joueur est hors-jeu si une partie de sa tête/corps/pieds est dans la moitié adverse ET plus près du but que le ballon ET l'avant-dernier défenseur
-- Penalty : coup franc direct à 11m du but dans la surface de réparation
-- Tirs au but : 5 tirs chacun en alternance, puis mort subite si égalité
-- But valide : le ballon doit entièrement franchir la ligne de but entre les poteaux et sous la barre
-- Handball intentionnel ou qui agrandit le corps = faute directe
-- Gardien : maximum 8 secondes pour tenir le ballon en main, sinon corner accordé à l'adversaire
-- VAR : but/pas but, penalty/pas penalty, carton rouge direct, erreur d'identité
-
-RÉCOMPENSES :
-- Soulier d'Or adidas : meilleur buteur
-- Ballon d'Or adidas : meilleur joueur
-- Gant d'Or adidas : meilleur gardien
-- Prix Fair Play FIFA : équipe la plus fair-play
-- Prix du Meilleur Jeune FIFA (né après le 1er janvier 2005)
-
-Si une question n'est pas liée au football ou à la CdM 2026, réponds : "Oops ! Je suis spécialisé uniquement dans le football et la Coupe du Monde 2026 ⚽ Pose-moi une question sur le foot et je serai ravi d'aider !"`;
-
 let history = [];
 let loading = false;
 
@@ -231,7 +184,11 @@ function addMsg(role, text) {
   av.textContent = role === 'bot' ? '⚽' : 'Toi';
   const b = document.createElement('div');
   b.className = 'bubble';
-  b.innerHTML = text.replace(/\n/g, '<br>');
+  // Safe rendering: textContent + manual line breaks
+  text.split('\n').forEach((line, i) => {
+    if (i > 0) b.appendChild(document.createElement('br'));
+    b.appendChild(document.createTextNode(line));
+  });
   d.appendChild(av); d.appendChild(b);
   messagesDiv.appendChild(d);
   scrollBottom();
@@ -245,27 +202,28 @@ function showTyping(v) {
 async function sendMessage() {
   const text = inputEl.value.trim();
   if (!text || loading) return;
+  if (text.length > 500) {
+    addMsg('bot', "Ta question est trop longue ! Essaie en moins de 500 caractères ⚽");
+    return;
+  }
   inputEl.value = '';
   inputEl.style.height = 'auto';
   addMsg('user', text);
-  history.push({ role: 'user', content: text });
+  // Keep only last 20 messages for history
+  const historyToSend = history.slice(-20);
   loading = true;
   showTyping(true);
   try {
-    const res = await fetch(WORKER_URL, {
+    const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1000,
-        system: SYSTEM_PROMPT,
-        messages: history
-      })
+      body: JSON.stringify({ message: text, history: historyToSend })
     });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    const reply = data.content && data.content[0] ? data.content[0].text : "Désolé, je n'ai pas pu répondre. Réessaie !";
+    const reply = data.reply || "Désolé, je n'ai pas pu répondre. Réessaie !";
+    history.push({ role: 'user', content: text });
     history.push({ role: 'assistant', content: reply });
-    if (history.length > 20) history = history.slice(-20);
     showTyping(false);
     addMsg('bot', reply);
   } catch(e) {
