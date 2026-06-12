@@ -1,10 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import dataset from '../../data/dataset.json';
 
 const buildSystemPrompt = () => {
-  const dataset = JSON.parse(readFileSync(join(process.cwd(), 'data/dataset.json'), 'utf8'));
-  console.log('[dataset] lu depuis disque —', Object.keys(dataset).length, 'sections, source:', dataset.source);
   const sections = Object.entries(dataset)
     .filter(([k]) => k !== 'source')
     .map(([k, v]) => `## ${k.replace(/_/g, ' ').toUpperCase()}\n${v}`)
